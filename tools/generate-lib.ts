@@ -12,13 +12,13 @@ const lib_version = (args.v ?? '1.0.1') as string;
 const unic = (str: string) => new TextEncoder().encode(str).reduce((f, c) => (f += '\\x' + c.toString(16)), '');
 
 async function getIconsVersion() {
-  const response = await fetch('https://github.com/tabler/tabler-icons/raw/master/package.json');
+  const response = await fetch('https://raw.githubusercontent.com/tabler/tabler-icons/master/package.json');
   const json = await response.json();
   return json.version as string;
 }
 
 async function getIconicFontCompressedBase85() {
-  const arr = await fetch('https://github.com/tabler/tabler-icons/raw/master/iconfont/fonts/tabler-icons.ttf').then(res => res.arrayBuffer());
+  const arr = await fetch('https://github.com/tabler/tabler-icons/raw/master/packages/icons-webfont/fonts/tabler-icons.ttf').then(res => res.arrayBuffer());
   await Deno.writeFile('.cache/tabler-icons.ttf', new Uint8Array(arr));
   const b2c_lua = Deno.run({
     cmd: ['./tools/b2c_lua.exe', '-base85', '.cache/tabler-icons.ttf', 'tabler_icons_font'],
@@ -32,7 +32,7 @@ async function getIconicFontCompressedBase85() {
 }
 
 async function getIcons() {
-  const response = await fetch('https://github.com/tabler/tabler-icons/raw/master/iconfont/tabler-icons.css');
+  const response = await fetch('https://raw.githubusercontent.com/tabler/tabler-icons/master/packages/icons-webfont/tabler-icons.css');
   const css = await response.text();
   const icons_css_regexp = /\.ti-(?<name>[\w-]+):before\s*\{\s*content:\s*"\\(?<unicode>[^"]+)";\s*}/gi;
   const rawIcons = Array.from(css.matchAll(icons_css_regexp));
