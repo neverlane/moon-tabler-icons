@@ -3,22 +3,23 @@ import { parse } from 'https://deno.land/std@0.86.0/flags/mod.ts';
 const args = parse(Deno.args, {
   string: [ 'v' ],
   default: {
-    v: '1.0.1'
+    v: '1.0.3'
   }
 });
 
-const lib_version = (args.v ?? '1.0.1') as string;
+const libVerson = args.v as string;
+const PACKAGE_DIR = 'https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest';
 
 const unic = (str: string) => new TextEncoder().encode(str).reduce((f, c) => (f += '\\x' + c.toString(16)), '');
 
 async function getIconsVersion() {
-  const response = await fetch('https://raw.githubusercontent.com/tabler/tabler-icons/master/package.json');
+  const response = await fetch(`${PACKAGE_DIR}/package.json`);
   const json = await response.json();
   return json.version as string;
 }
 
 async function getIconicFontCompressedBase85() {
-  const arr = await fetch('https://github.com/tabler/tabler-icons/raw/master/packages/icons-webfont/fonts/tabler-icons.ttf').then(res => res.arrayBuffer());
+  const arr = await fetch(`${PACKAGE_DIR}/dist/fonts/tabler-icons.ttf`).then(res => res.arrayBuffer());
   await Deno.writeFile('.cache/tabler-icons.ttf', new Uint8Array(arr));
   const b2c_lua = Deno.run({
     cmd: ['./tools/b2c_lua.exe', '-base85', '.cache/tabler-icons.ttf', 'tabler_icons_font'],
@@ -32,7 +33,7 @@ async function getIconicFontCompressedBase85() {
 }
 
 async function getIcons() {
-  const response = await fetch('https://raw.githubusercontent.com/tabler/tabler-icons/master/packages/icons-webfont/tabler-icons.css');
+  const response = await fetch(`${PACKAGE_DIR}/dist/tabler-icons.css`);
   const css = await response.text();
   const icons_css_regexp = /\.ti-(?<name>[\w-]+):before\s*\{\s*content:\s*"\\(?<unicode>[^"]+)";\s*}/gi;
   const rawIcons = Array.from(css.matchAll(icons_css_regexp));
@@ -47,29 +48,30 @@ function getIconsRanges(icons: string[][]) {
 }
 
 const _icons = await getIcons();
+
 const icons = {
   items: _icons,
   version: await getIconsVersion(),
   ranges: await getIconsRanges(_icons)
 }
 
-let lua_code = '';
+let luaCode = '';
 
 // lib info
-lua_code += `
+luaCode += `
 -- Tabler Icons Lua
--- Version: ${lib_version}
+-- Version: ${libVerson}
 -- Icons version: ${icons.version}
 `;
 
 // lib iconic font
-lua_code += `\n${await getIconicFontCompressedBase85()}`;
+luaCode += `\n${await getIconicFontCompressedBase85()}`;
 
 // lua
-lua_code += `
+luaCode += `
 local MIN_ICON, MAX_ICON = ${icons.ranges.join(', ')}
 local mod = {
-  __VERSION = '${lib_version}';
+  __VERSION = '${libVerson}';
   __ICONS_VERSION = '${icons.version}';
   min_range = MIN_ICON;
   max_range = MAX_ICON;
@@ -81,12 +83,12 @@ local mod = {
 const createIconName = (str: string) => `ICON_${str.replaceAll('-', '_').toUpperCase()}`
 
 // icons
-lua_code += '\ndo';
+luaCode += '\ndo';
 for (const [iconName, iconUnicode] of icons.items)
-  lua_code += `\n  mod['${createIconName(iconName)}'] = '${unic(String.fromCharCode(parseInt(iconUnicode, 16)))}'`;
-lua_code += '\nend';
+  luaCode += `\n  mod['${createIconName(iconName)}'] = '${unic(String.fromCharCode(parseInt(iconUnicode, 16)))}'`;
+luaCode += '\nend';
 
-lua_code += `
+luaCode += `
 local function unicode_to_utf8(code)
 -- converts numeric UTF code (U+code) to UTF-8 string
 local t, h = {}, 128
@@ -112,6 +114,9 @@ end
 
 return mod`;
 
-Deno.writeFile(`./lua/tabler-icons-v${icons.version}.lua`, new TextEncoder().encode(lua_code));
+const encodedCode = new TextEncoder().encode(luaCode);
 
-console.log('ok');
+await Deno.writeFile(`./lua/tabler-icons-v${icons.version}.lua`, encodedCode);
+await Deno.writeFile('./tabler_icons.lua', encodedCode); // master
+
+console.log(`generated lua/tabler-icons-v${libVerson}.lua (icons version: ${icons.version})`);
